@@ -1925,6 +1925,16 @@ void vtkF3DRenderer::SetEmissiveFactor(const std::optional<std::vector<double>>&
 }
 
 //----------------------------------------------------------------------------
+void vtkF3DRenderer::SetTexturesTransform(const std::optional<std::vector<double>>& transform)
+{
+  if (this->TexturesTransform != transform)
+  {
+    this->TexturesTransform = transform;
+    this->ActorsPropertiesConfigured = false;
+  }
+}
+
+//----------------------------------------------------------------------------
 void vtkF3DRenderer::SetTextureMatCap(const std::optional<fs::path>& tex)
 {
   if (this->TextureMatCap != tex)
@@ -2075,6 +2085,20 @@ void vtkF3DRenderer::ConfigureActorsProperties()
     }
 
     // Textures
+    if (this->TexturesTransform.has_value())
+    {
+      const std::vector<double> texTransform = this->TexturesTransform.value();
+      double transform[] = {                                    //
+        texTransform[0], texTransform[1], texTransform[2], 0.0, //
+        texTransform[3], texTransform[4], texTransform[5], 0.0, //
+        texTransform[6], texTransform[7], texTransform[8], 0.0, //
+        0.0, 0.0, 0.0, 1.0
+      };
+
+      this->ConfigureActorTextureTransform(coloring.OriginalActor, transform);
+      this->ConfigureActorTextureTransform(coloring.Actor, transform);
+    }
+
     if (this->TextureBaseColor.has_value())
     {
       auto colorTex = ::GetTexture(this->TextureBaseColor.value(), true);
@@ -2306,6 +2330,23 @@ void vtkF3DRenderer::SetColormap(const std::vector<double>& colormap)
   if (this->Colormap != colormap)
   {
     this->Colormap = colormap;
+
+    this->ColorTransferFunctionConfigured = false;
+    this->ColoringMappersConfigured = false;
+    this->PointSpritesMappersConfigured = false;
+    this->VolumePropsAndMappersConfigured = false;
+
+    this->ScalarBarActorConfigured = false;
+    this->ColoringConfigured = false;
+  }
+}
+
+//----------------------------------------------------------------------------
+void vtkF3DRenderer::SetColormapDiscretization(std::optional<int> discretization)
+{
+  if (this->ColormapDiscretization != discretization)
+  {
+    this->ColormapDiscretization = discretization;
 
     this->ColorTransferFunctionConfigured = false;
     this->ColoringMappersConfigured = false;
@@ -2729,10 +2770,10 @@ void vtkF3DRenderer::ConfigureRangeAndCTFForColoring(
         this->ColorTransferFunction->AddRGBPoint(
           this->ColorRange[0] + val * (this->ColorRange[1] - this->ColorRange[0]), r, g, b);
       }
-      if (this->ColorMapDiscretization.has_value() && this->ColorMapDiscretization.value() > 0)
+      if (this->ColormapDiscretization.has_value() && this->ColormapDiscretization.value() > 0)
       {
         this->ColorTransferFunction->DiscretizeOn();
-        this->ColorTransferFunction->SetNumberOfValues(this->ColorMapDiscretization.value());
+        this->ColorTransferFunction->SetNumberOfValues(this->ColormapDiscretization.value());
       }
       else
       {
@@ -2770,6 +2811,43 @@ void vtkF3DRenderer::CycleFieldForColoring()
   {
     // Cycle array if the current one is not valid
     this->CycleArrayForColoring();
+  }
+}
+
+//----------------------------------------------------------------------------
+void vtkF3DRenderer::ConfigureActorTextureTransform(vtkActor* actorBase, const double* matrix)
+{
+  vtkInformation* info = actorBase->GetPropertyKeys();
+  if (info)
+  {
+    /**
+     * The actor already has a property key dictionary
+     * Check that GeneralTextureTransform exists and combine,
+     * Otherwise set the property to our texture transform
+     */
+
+    double finalTransform[16] = {};
+    for (int i = 0; i < 16; i++)
+    {
+      finalTransform[i] = matrix[i];
+    }
+
+    if (auto transformPtr = info->Get(vtkProp::GeneralTextureTransform()))
+    {
+      // We need to create 4x4 vtk matrixes from the arrays
+      vtkNew<vtkMatrix4x4> matTransform;
+      matTransform->Multiply4x4(transformPtr, matrix, finalTransform);
+    }
+    info->Set(vtkProp::GeneralTextureTransform(), finalTransform, 16);
+  }
+  else
+  {
+    /**
+     * No dictionary found, add new dictionary with transform
+     */
+    vtkNew<vtkInformation> properties;
+    properties->Set(vtkProp::GeneralTextureTransform(), matrix, 16);
+    actorBase->SetPropertyKeys(properties);
   }
 }
 
