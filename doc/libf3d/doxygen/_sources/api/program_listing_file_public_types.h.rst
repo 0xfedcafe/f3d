@@ -18,6 +18,7 @@ Program Listing for File types.h
    
    #include <algorithm>
    #include <array>
+   #include <cstdint>
    #include <iostream>
    #include <string>
    #include <vector>
@@ -60,7 +61,7 @@ Program Listing for File types.h
      }
    
    private:
-     double Value;
+     double Value = 0;
    };
    
    template<unsigned int N>
@@ -121,7 +122,7 @@ Program Listing for File types.h
      std::array<double, N> Array{ 0 };
    };
    
-   class color_t : public double_array_t<3>
+   class F3D_EXPORT color_t : public double_array_t<3>
    {
    public:
      inline color_t() = default;
@@ -217,6 +218,12 @@ Program Listing for File types.h
        (*this)[7] = M3_2;
        (*this)[8] = M3_3;
      }
+   
+     // clang-format off
+     // clang-format on
+   
+     F3D_EXPORT transform2d_t(const double_array_t<2>& scale, const double_array_t<2>& translate,
+       const angle_deg_t& angleRad);
    };
    
    class colormap_t
@@ -262,6 +269,33 @@ Program Listing for File types.h
    
      F3D_EXPORT std::pair<bool, std::string> isValid() const;
    };
+   
+   enum class F3D_EXPORT light_type : std::uint8_t
+   {
+     HEADLIGHT = 1,
+     CAMERA_LIGHT = 2,
+     SCENE_LIGHT = 3,
+   };
+   
+   struct F3D_EXPORT light_state_t
+   {
+     light_type type = light_type::SCENE_LIGHT;
+     point3_t position = { 0., 0., 0. };
+     color_t color = { 1., 1., 1. };
+     vector3_t direction = { 1., 0., 0. };
+     bool positionalLight = false;
+     double intensity = 1.0;
+     bool switchState = true;
+   
+     [[nodiscard]] bool operator==(const light_state_t& other) const
+     {
+       return this->type == other.type && this->position == other.position &&
+         this->color == other.color && this->direction == other.direction &&
+         this->positionalLight == other.positionalLight && this->intensity == other.intensity &&
+         this->switchState == other.switchState;
+     }
+   };
+   
    }
    
    #endif
